@@ -9,9 +9,13 @@ from moviepy.video.fx.crop import crop
 from moviepy.video.fx.margin import margin
 from moviepy.editor import AudioFileClip
 import os
+from instagrapi import Client as Insta_Client
+import time
+import glob
 
 
-parser = argparse.ArgumentParser(description="Okta Client Configuration")
+
+parser = argparse.ArgumentParser(description="Okta client_chatgpt Configuration")
 parser.add_argument("-c", "--config", help="Path to the configuration YAML file", required=True)
 args = parser.parse_args()
 loadConfig = lambda config_file: yaml.safe_load(open(config_file, 'r'))
@@ -20,13 +24,18 @@ yamlConfig = loadConfig(args.config)
 openai_key = yamlConfig["openai"]["apikey"]
 pexels_key = yamlConfig["pexels"]["apikey"]
 freesound_key = yamlConfig["freesound"]["apikey"]
+insta_user = yamlConfig["instagram"]["username"]
+insta_password = yamlConfig["instagram"]["password"]
 
+insta_client = Insta_Client()
 
+insta_client.login(insta_user,insta_password)
+user = insta_client.account_info()
+print("Logged as " + user.username)
 
-
-client = OpenAI(
-  organization='org-ucCRhUIXtuLLYoGQMZ2l0oXm',
-  project='proj_MaMf0mWqgLNrTCzQrxbvBrdZ',
+client_chatgpt = OpenAI(
+  organization=yamlConfig["openai"]["orgId"],
+  project=yamlConfig["openai"]["projectId"],
 )
 
 prompt = f"""
@@ -39,7 +48,7 @@ In 2025, let us rise with determination, dream with fervor, and create a future 
 
 In 2025, let us embrace every challenge as an opportunity to grow, every setback as a lesson, and every success as a stepping stone to even greater heights.
 
-Finally, Try to be as creative as possible. Do not reuse.
+Finally, Try to be as creative as possible. Do not reuse. dont use the word Dance
 
 """
 
@@ -76,8 +85,8 @@ def download_sound(preview_url, save_directory="./sounds/"):
         print(f"Error downloading sound: {e}")
         return None
 
-def get_inspirational_quote(prompt,client) -> str:
-    stream = client.chat.completions.create(
+def get_inspirational_quote(prompt,client_chatgpt) -> str:
+    stream = client_chatgpt.chat.completions.create(
     model="gpt-4o-mini",
     messages=[{"role": "user", "content": prompt}],
     stream=True,
@@ -149,7 +158,6 @@ def add_text_to_video(path,text):
     video_with_text = CompositeVideoClip([video, text_clip])
     output_path = F"./videos/video{random.randint(1,9*99999)}.mp4"
     video_with_text.write_videofile(output_path, codec="libx264", fps=24)
-    os.remove(path)
     return output_path
     
 
@@ -170,10 +178,10 @@ def trim_to_first_10_seconds(input_path, output_path=None):
         print(f"Error trimming video: {e}")
         return None
     
-def resize_to_1080x2048(input_path, output_path=None):
+def resize_to_1080x1920(input_path, output_path=None):
     try:
         video = VideoFileClip(input_path)
-        target_width, target_height = 1080, 2048
+        target_width, target_height = 1080, 1920
         
         video_aspect_ratio = video.w / video.h
         target_aspect_ratio = target_width / target_height
@@ -248,25 +256,60 @@ def add_audio_to_video(video_path, sound_path,name=None):
     
     return output_path
 
+def post_on_insta(video_path,caption,insta_client):
+    try:
+        media = insta_client.video_upload(video_path, caption)
+        print(f"Reel posted successfully! Reel ID: {media.pk}")
+    except Exception as e:
+        print(f"Failed to post the reel: {e}")
+    
+    
+def remove_jpg_files(directory):
+    jpg_files = glob.glob(os.path.join(directory, "*.jpg"))  
+    if not jpg_files:
+        print("No .jpg files found to delete.")
+        return
 
+    for file_path in jpg_files:
+        try:
+            os.remove(file_path)
+            print(f"Deleted: {file_path}")
+        except Exception as e:
+            print(f"Error deleting file {file_path}: {e}")
+            
+def remove_all_files_from_directory(directory):
+    files = glob.glob(os.path.join(directory, "*"))
+    
+    if not files:
+        print(f"No files found in '{directory}' to delete.")
+        return
+    
+    for file_path in files:
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            print(f"Error deleting file '{file_path}': {e}")
+            continue
 
 
 
 def make_a_reel(name=None):
     music_keyword = [
     "Piano", "Inspirational", "Violon", "Calm", "Motivational", "Peaceful", "Uplifting",
-    "Hopeful", "Strings", "Serene", "Emotional", "Epic", "Relaxing", "Cinematic", "Ambient", "Warm",
+    "Hopeful",  "Serene", "Emotional",  "Relaxing", 
     "Joyful", "Beautiful", "Dreamy", "Positive", "Empowering", "Flowing", "Soothing", "Elegant", "Peaceful",
     "Ethereal", "Triumphant", "Light", "Heartfelt", "Graceful", "Tranquil", "Majestic", "Melodic", "Orchestration",
-    "Soft", "Passionate", "Motivating", "Healing", "Lush", "Inspirational strings", "Refined", "Vibrant", "Noble",
+    "Passionate", "Motivating", "Healing", "Lush", "Inspirational strings", "Refined", "Vibrant", "Noble",
     "Bright", "Acoustic", "Joyous", "Positive energy", "Healing vibes", "Euphoria", "Relaxation", "Introspective",
     "Serendipity", "Harmony", "Reflective", "Cinematic strings", "Adventure", "Powerful", "Solo piano", "Rising",
     "Wonder", "Dreamlike", "Grace", "Unstoppable", "Light-hearted", "Sweeping", "Spirit-lifting",
-    "Courageous", "Motivating beat", "Timeless", "Everlasting", "Sacred", "Victory", "Freedom", "Exploration",
+    "Courageous", "Motivating beat", "Timeless", "Everlasting", "Victory", "Freedom", "Exploration",
     "Invigorating", "Radiant", "Glorious", "Determined", "Striking", "Infinite", "Visionary", "Moving", "Rejuvenating",
-    "Glowing", "Focused", "Powerful melody", "Steady", "Inspirational rise", "Anthemic", "Warmth", "Strength",
+    "Glowing", "Focused", "Powerful melody",  "Inspirational rise", "Anthemic", "Warmth", "Strength",
     "Invincible", "Alluring", "Blissful", "Tender", "Monumental", "Motivating rhythm", "Captivating"
     ]
+    
+    
 
     music_query = random.choice(music_keyword)
     print(music_query)
@@ -280,26 +323,36 @@ def make_a_reel(name=None):
     video_url = get_video_url(pexels_key)
     video_path = download_video(video_url)
     if not check_video_validity(video_path):
-        old_video_path = video_path
         video_path = trim_to_first_10_seconds(video_path)
-        os.remove(old_video_path)
-    old_video_path = video_path
-    video_path = resize_to_1080x2048(video_path)
-    os.remove(old_video_path)
-    quote = get_inspirational_quote(prompt,client)
+    video_path = resize_to_1080x1920(video_path)
+    quote = get_inspirational_quote(prompt,client_chatgpt)
+    caption = f"""{quote}\n#fitness #inspiration #love #gym #workout #motivationalquotes #lifestyle #success #dance #2025"""
     video_path = add_text_to_video(video_path,quote)
     reels_name = add_audio_to_video(video_path,sound_path,name)
-    os.remove(video_path)
-    os.remove(sound_path)
+    print(reels_name)
+
+    
+    post_on_insta(reels_name,caption,insta_client)
+    remove_jpg_files("./videos_and_sound")
+    remove_all_files_from_directory("./videos")
+    remove_all_files_from_directory("./sounds")
+    
+
+    print("Waiting 60 seconds...")
+    time.sleep(60)
+    
     return reels_name
     
 
 def main():
-    for i in range(1,100):
+    for i in range(1,5):
         try:
             print(make_a_reel(name=i))
-        except:
+        except Exception as e:
+            print(e)
             continue
+    insta_user.logout()
+
         
 
         
